@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polynomial Master</title>
+    <script src="https://unpkg.com/mathlive"></script>
+    <style>
+        :root { --primary: #6c5ce7; --secondary: #a29bfe; --success: #00b894; --error: #ff7675; }
+        body {
+            font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5;
+            display: flex; flex-direction: column; align-items: center; padding: 40px 20px;
+        }
+        .container {
+            background: white; padding: 30px; border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 600px;
+        }
+        h2 { color: var(--primary); text-align: center; margin-top: 0; }
+        math-field {
+            font-size: 1.5rem; padding: 10px; border: 2px solid #ddd;
+            border-radius: 12px; width: 100%; outline: none; transition: 0.2s;
+        }
+        math-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.1); }
+        .btn {
+            background: var(--primary); color: white; border: none; padding: 12px 20px;
+            border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px;
+        }
+        #message { margin-top: 20px; padding: 15px; border-radius: 10px; text-align: center; font-weight: 500; display: none; }
+        .step-list { list-style: none; padding: 0; margin-top: 20px; }
+        .step-item { display: flex; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid var(--secondary); }
+        .step-num { font-weight: bold; margin-right: 15px; color: #636e72; }
+        .input-area { display: none; flex-direction: column; gap: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>✨ Polynomial Pro</h2>
+    <p style="text-align: center; color: #636e72;">Add or subtract polynomials step-by-step.</p>
+
+    <div id="setupArea">
+        <math-field id="mainInput"> (3x^2 + 5x) - (x^2 - 2) </math-field>
+        <button class="btn" onclick="startSession()">Start Simplifying</button>
+    </div>
+
+    <ul id="stepList" class="step-list"></ul>
+
+    <div id="inputArea" class="input-area">
+        <math-field id="stepInput" onkeydown="if(event.key==='Enter') checkStep()"></math-field>
+        <button class="btn" style="background: var(--success)" onclick="checkStep()">Check Step</button>
+    </div>
+
+    <div id="message"></div>
+</div>
+
+<script>
+ let goalMap = null;
+let steps = [];
+
+function parsePolynomial(latex) {
+    // 1. Clean LaTeX (remove formatting, handle distribution)
+    let str = latex.replace(/\\left\(/g, '(').replace(/\\right\)/g, ')').replace(/{/g, '').replace(/}/g, '');
+    
+    // Distribute negative signs: -(2x + 3y) -> -2x - 3y
+    while (str.includes('-(')) {
+        str = str.replace(/-\(([^()]+)\)/g, (match, inner) => {
+            return inner.replace(/([+-]|^)/g, (m) => m === '-' ? '+' : '-');
+        });
+    }
+    str = str.replace(/\(([^()]+)\)/g, '$1'); 
+
+    // 2. Tokenize: Break into terms like [+3x^2, -2xy, +5]
+    const termRegex = /[+-]?[^+-]+/g;
+    const terms = str.replace(/\s+/g, '').match(termRegex) || [];
+    
+    let map = {};
+
+    terms.forEach(term => {
+        // Find the first letter to separate Coefficient from Variables
+        let firstLetterIdx = term.search(/[a-zA-Z]/);
+        
+        let coef, varPart;
+
+        if (firstLetterIdx === -1) {
+            // It's just a constant (e.g., "+5")
+            coef = parseFloat(term);
+            varPart = "constant";
+        } else {
+            // Split into number and letters (e.g., "-3" and "x^2y")
+            let coefStr = term.substring(0, firstLetterIdx);
+            varPart = term.substring(firstLetterIdx);
+
+            if (coefStr === "" || coefStr === "+") coef = 1;
+            else if (coefStr === "-") coef = -1;
+            else coef = parseFloat(coefStr);
+
+            // NORMALIZATION: Alphabetize letters so 'yx' becomes 'xy'
+            // This ensures like terms always have the exact same key string
+            varPart = normalizeVariables(varPart);
+        }
+
+        if (!isNaN(coef)) {
+            map[varPart] = (map[varPart] || 0) + coef;
+        }
+    });
+
+    // Cleanup: Remove terms that canceled out to zero
+    for (let key in map) if (Math.abs(map[key]) < 0.001) delete map[key];
+    
+    return map;
+}
+
+function normalizeVariables(vStr) {
+    // This turns "y^2x" into "xy^2"
+    // 1. Find all variable chunks (e.g., x^2, y, z^3)
+    let chunks = vStr.match(/[a-zA-Z](\^\d+)?/g) || [];
+    // 2. Sort them alphabetically
+    chunks.sort();
+    // 3. Rejoin them
+    return chunks.join('');
+}
+
+function mapsMatch(map1, map2) {
+    const keys1 = Object.keys(map1);
+    const keys2 = Object.keys(map2);
+    if (keys1.length !== keys2.length) return false;
+    return keys1.every(k => Math.abs((map1[k] || 0) - (map2[k] || 0)) < 0.001);
+}
+
+// ... (Keep the rest of your startSession, checkStep, and renderSteps functions)
+
+    function mapsMatch(map1, map2) {
+        const keys1 = Object.keys(map1);
+        const keys2 = Object.keys(map2);
+        if (keys1.length !== keys2.length) return false;
+        return keys1.every(k => Math.abs(map1[k] - map2[k]) < 0.001);
+    }
+
+    // --- UI LOGIC ---
+
+    function startSession() {
+        const input = document.getElementById('mainInput').value;
+        goalMap = parsePolynomial(input);
+        
+        if (Object.keys(goalMap).length === 0) {
+            return showMsg("Enter a valid polynomial first!", "error");
+        }
+
+        steps = [input];
+        renderSteps();
+        document.getElementById('setupArea').style.display = 'none';
+        document.getElementById('inputArea').style.display = 'flex';
+        showMsg("Great! Show me the next step.", "success");
+    }
+
+    function checkStep() {
+        const val = document.getElementById('stepInput').value;
+        const currentMap = parsePolynomial(val);
+
+        if (mapsMatch(currentMap, goalMap)) {
+            steps.push(val);
+            renderSteps();
+            document.getElementById('stepInput').value = "";
+            
+            // Check if finished (simplified form: no parentheses and terms are combined)
+            if (!val.includes('(') && Object.keys(currentMap).length === (val.match(/[+-]?[^+-]+/g) || []).length) {
+                showMsg("🎉 Fully simplified! Great job!", "success");
+                document.getElementById('inputArea').style.display = 'none';
+            } else {
+                showMsg("Correct! Keep going until it's fully simplified.", "success");
+            }
+        } else {
+            showMsg("That's not quite equivalent. Check your signs or your math!", "error");
+        }
+    }
+
+    function renderSteps() {
+        const list = document.getElementById('stepList');
+        list.innerHTML = steps.map((s, i) => `
+            <li class="step-item">
+                <span class="step-num">${i + 1}</span>
+                <math-field read-only>${s}</math-field>
+            </li>
+        `).join('');
+    }
+
+    function showMsg(txt, type) {
+        const el = document.getElementById('message');
+        el.innerText = txt;
+        el.style.display = 'block';
+        el.style.backgroundColor = type === 'success' ? '#d1fae5' : '#fee2e2';
+        el.style.color = type === 'success' ? '#065f46' : '#991b1b';
+    }
+</script>
+
+</body>
+</html>
